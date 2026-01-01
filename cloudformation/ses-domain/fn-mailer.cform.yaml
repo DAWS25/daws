@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda function for testing email sending via SES
+
+Parameters:
+  EnvId:
+    Type: String
+    Description: Environment identifier for resource naming
+
+  DomainName:
+    Type: String
+    Description: Domain name for SES
+
+  ConfigurationSetName:
+    Type: String
+    Description: SES Configuration Set name
+
+Resources:
+  # =============================================================================
+  # Mailer Lambda Role
+  # IAM role allowing Lambda to send emails via SES
+  # =============================================================================
+  MailerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvId}-fn-mailer-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SESSendEmail
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+
+  # =============================================================================
+  # Mailer Lambda Function
+  # Test function to send emails from the configured domain
+  # =============================================================================
+  MailerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvId}-fn-mailer'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt MailerFunctionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          DOMAIN_NAME: !Ref DomainName
+          CONFIGURATION_SET: !Ref ConfigurationSetName
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+
+          ses = boto3.client('ses')
+          DOMAIN = os.environ['DOMAIN_NAME']
+          CONFIG_SET = os.environ['CONFIGURATION_SET']
+
+          def handler(event, context):
+              # Get parameters from event or use defaults
+              to_email = event.get('to', f'test@{DOMAIN}')
+              subject = event.get('subject', 'Test Email from SES')
+              body = event.get('body', f'This is a test email sent from {DOMAIN} via Amazon SES.')
+              from_email = event.get('from', f'noreply@{DOMAIN}')
+              
+              try:
+                  response = ses.send_email(
+                      Source=from_email,
+                      Destination={'ToAddresses': [to_email]},
+                      Message={
+                          'Subject': {'Data': subject, 'Charset': 'UTF-8'},
+                          'Body': {'Text': {'Data': body, 'Charset': 'UTF-8'}}
+                      },
+                      ConfigurationSetName=CONFIG_SET
+                  )
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Email sent successfully',
+                          'messageId': response['MessageId'],
+                          'from': from_email,
+                          'to': to_email
+                      })
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+Outputs:
+  MailerFunctionName:
+    Description: Name of the mailer Lambda function
+    Value: !Ref MailerFunction
+
+  MailerFunctionArn:
+    Description: ARN of the mailer Lambda function
+    Value: !GetAtt MailerFunction.Arn

@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket for storing SES received emails
+
+Resources:
+  # =============================================================================
+  # S3 Bucket for Email Storage
+  # Stores all incoming emails received through SES receipt rules.
+  # Encrypted with AES-256 and versioning enabled for safety.
+  # CloudFormation auto-generates the bucket name to ensure global uniqueness.
+  # =============================================================================
+  EmailStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldEmails
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+            ExpirationInDays: 90
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  # =============================================================================
+  # S3 Bucket Policy
+  # Grants SES permission to write received emails to the bucket.
+  # =============================================================================
+  EmailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EmailStorageBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSESPuts
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${EmailStorageBucket}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+
+Outputs:
+  EmailStorageBucket:
+    Description: Name of the S3 bucket for storing received emails
+    Value: !Ref EmailStorageBucket
+
+  EmailStorageBucketArn:
+    Description: ARN of the S3 bucket for email storage
+    Value: !GetAtt EmailStorageBucket.Arn

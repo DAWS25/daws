@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SES sending resources - domain identity, SPF, and configuration
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for SES
+
+  DomainNameSafe:
+    Type: String
+    Description: Domain name with dots replaced by hyphens (for resource naming)
+
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID
+
+Resources:
+  # =============================================================================
+  # SES Domain Identity
+  # Registers the domain with SES and enables DKIM signing for email authentication.
+  # Uses a custom MAIL FROM domain (mail.yourdomain.com) for better deliverability.
+  # =============================================================================
+  SESDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref DomainName
+      DkimAttributes:
+        SigningEnabled: true
+      MailFromAttributes:
+        MailFromDomain: !Sub 'mail.${DomainName}'
+        BehaviorOnMxFailure: USE_DEFAULT_VALUE
+
+  # =============================================================================
+  # SPF Record (Sender Policy Framework)
+  # Authorizes Amazon SES to send emails on behalf of your domain.
+  # Receiving servers check this to prevent email spoofing.
+  # =============================================================================
+  SPFRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub '${DomainName}.'
+      Type: TXT
+      TTL: '300'
+      ResourceRecords:
+        - '"v=spf1 include:amazonses.com ~all"'
+
+  # =============================================================================
+  # MAIL FROM MX Record
+  # Routes bounce and complaint notifications back to SES for the custom
+  # MAIL FROM domain (mail.yourdomain.com). Improves deliverability.
+  # =============================================================================
+  MailFromMXRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'mail.${DomainName}.'
+      Type: MX
+      TTL: '300'
+      ResourceRecords:
+        - !Sub '10 feedback-smtp.${AWS::Region}.amazonses.com'
+
+  # =============================================================================
+  # MAIL FROM SPF Record
+  # SPF record for the custom MAIL FROM subdomain to authorize SES.
+  # =============================================================================
+  MailFromSPFRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'mail.${DomainName}.'
+      Type: TXT
+      TTL: '300'
+      ResourceRecords:
+        - '"v=spf1 include:amazonses.com ~all"'
+
+  # =============================================================================
+  # SES Configuration Set
+  # Tracks email sending metrics (deliveries, bounces, complaints).
+  # Auto-suppresses addresses that bounce or complain to protect sender reputation.
+  # =============================================================================
+  SESConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: !Sub '${DomainNameSafe}-config-set'
+      ReputationOptions:
+        ReputationMetricsEnabled: true
+      SendingOptions:
+        SendingEnabled: true
+      SuppressionOptions:
+        SuppressedReasons:
+          - BOUNCE
+          - COMPLAINT
+
+Outputs:
+  DomainIdentityArn:
+    Description: ARN of the SES Domain Identity
+    Value: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${DomainName}'
+
+  ConfigurationSetName:
+    Description: Name of the SES Configuration Set
+    Value: !Ref SESConfigurationSet
+
+  SMTPEndpoint:
+    Description: SES SMTP endpoint for sending emails
+    Value: !Sub 'email-smtp.${AWS::Region}.amazonaws.com'
