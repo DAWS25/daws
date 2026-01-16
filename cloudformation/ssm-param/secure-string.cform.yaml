@@ -25,8 +25,9 @@ Resources:
     Properties:
       Name: !Sub "/env/${EnvId}/${ParamName}"
       Value: !Ref ParamValue
-      Type: String
-
+      Type: SecureString
+      KeyId: !ImportValue
+        Fn::Sub: "${EnvId}-KMSKeyId"
 Outputs:
   SSMParameterName:
     Description: Name of the created SSM parameter

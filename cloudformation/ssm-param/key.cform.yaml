@@ -9,7 +9,7 @@ Parameters:
     Default: project
 
 Resources:
-  KMSKey:
+  SSMKey:
     Type: AWS::KMS::Key
     Properties:
       KeyPolicy:
@@ -35,10 +35,10 @@ Resources:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub "alias/${EnvId}-ssm"
-      TargetKeyId: !Ref KMSKey
+      TargetKeyId: !Ref SSMKey
 
 Outputs:
-  KMSKeyId:
-    Value: !Ref KMSKey
+  SSMKeyId:
+    Value: !Ref SSMKey
     Export:
-      Name: !Sub "${EnvId}-KMSKeyId"
+      Name: !Sub "${EnvId}-SSMKeyId"
