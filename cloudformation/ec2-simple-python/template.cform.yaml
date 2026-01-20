@@ -1,3 +1,7 @@
+# deploy without key:
+# aws cloudformation deploy --stack-name simple-ec2-python --template-file ./cloudformation/ec2-simple-python/template.cform.yaml
+
+# deploy with key:
 # KEYPAIR_NAME="project-keypair"
 # aws ec2 create-key-pair --key-name $KEYPAIR_NAME --query "KeyMaterial" --output text > $HOME/$KEYPAIR_NAME.pem
 
@@ -13,7 +17,7 @@ Description: EC2 instance running a Python HTTP server
 Parameters:
   InstanceType:
     Type: String
-    Default: t4g.nano
+    Default: t4g.small
 
   AmiSsmParameter:
     Type: String
@@ -22,8 +26,8 @@ Parameters:
 
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    Default: "default"
+    Type: String
+    Default: ""
 
   GitHubUser:
     Description: GitHub username owning the repo
@@ -49,6 +53,9 @@ Parameters:
     Type: String
     Default: gp3
 
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+
 Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -68,7 +75,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
       ImageId: !Sub "{{resolve:ssm:${AmiSsmParameter}}}"
       SecurityGroupIds:
         - !Ref InstanceSecurityGroup
