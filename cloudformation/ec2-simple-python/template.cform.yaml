@@ -2,8 +2,9 @@
 # aws cloudformation deploy --stack-name simple-ec2-python --template-file ./cloudformation/ec2-simple-python/template.cform.yaml
 
 # deploy with key:
-# KEYPAIR_NAME="project-keypair"
+# KEYPAIR_NAME="default"
 # aws ec2 create-key-pair --key-name $KEYPAIR_NAME --query "KeyMaterial" --output text > $HOME/$KEYPAIR_NAME.pem
+# aws cloudformation deploy --stack-name simple-ec2-python --template-file ./cloudformation/ec2-simple-python/template.cform.yaml --parameter-overrides KeyName=$KEYPAIR_NAME
 
 # aws cloudformation deploy --stack-name simple-ec2-python --template-file cloudformation/ec2-simple-python/template.cform.yaml --parameter-overrides KeyName=$KEYPAIR_NAME
 # PUBLIC_IP=$(aws cloudformation describe-stacks --stack-name simple-ec2-python --query "Stacks[0].Outputs[?OutputKey=='InstancePublicIP'].OutputValue" --output text)
