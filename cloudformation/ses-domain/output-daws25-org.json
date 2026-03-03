@@ -1,0 +1,102 @@
+{
+    "StackId": "arn:aws:cloudformation:us-east-1:081276392869:stack/daws25-org-ses/df144c60-e6f9-11f0-a6ee-0affc06785ab",
+    "StackName": "daws25-org-ses",
+    "ChangeSetId": "arn:aws:cloudformation:us-east-1:081276392869:changeSet/awscli-cloudformation-package-deploy-1767262778/8d303386-f2c1-4416-ae79-55c71a5007ec",
+    "Description": "Main template for SES setup using nested stacks for sending, receiving, and storage",
+    "Parameters": [
+        {
+            "ParameterKey": "DomainName",
+            "ParameterValue": "daws25.org"
+        },
+        {
+            "ParameterKey": "HostedZoneId",
+            "ParameterValue": "Z0921914152XH19OIIQKY"
+        },
+        {
+            "ParameterKey": "EnvId",
+            "ParameterValue": "daws25-org"
+        }
+    ],
+    "CreationTime": "2026-01-01T10:08:51.305000+00:00",
+    "LastUpdatedTime": "2026-01-01T10:19:43.121000+00:00",
+    "RollbackConfiguration": {},
+    "StackStatus": "UPDATE_COMPLETE",
+    "DisableRollback": false,
+    "NotificationARNs": [],
+    "Capabilities": [
+        "CAPABILITY_NAMED_IAM"
+    ],
+    "Outputs": [
+        {
+            "OutputKey": "DomainIdentityArn",
+            "OutputValue": "arn:aws:ses:us-east-1:081276392869:identity/daws25.org",
+            "Description": "ARN of the SES Domain Identity",
+            "ExportName": "daws25-org-DomainIdentityArn"
+        },
+        {
+            "OutputKey": "SMTPEndpoint",
+            "OutputValue": "email-smtp.us-east-1.amazonaws.com",
+            "Description": "SES SMTP endpoint for sending emails",
+            "ExportName": "daws25-org-SMTPEndpoint"
+        },
+        {
+            "OutputKey": "EmailStorageBucket",
+            "OutputValue": "daws25-org-ses-s3storagestack-2-emailstoragebucket-tytknagjcb2a",
+            "Description": "S3 bucket for storing received emails",
+            "ExportName": "daws25-org-EmailStorageBucket"
+        },
+        {
+            "OutputKey": "DomainName",
+            "OutputValue": "daws25.org",
+            "Description": "The domain configured for SES",
+            "ExportName": "daws25-org-DomainName"
+        },
+        {
+            "OutputKey": "ReceiptRuleSetName",
+            "OutputValue": "daws25.org-ruleset",
+            "Description": "Name of the SES Receipt Rule Set",
+            "ExportName": "daws25-org-ReceiptRuleSetName"
+        },
+        {
+            "OutputKey": "ConfigurationSetName",
+            "OutputValue": "daws25-org-config-set",
+            "Description": "Name of the SES Configuration Set",
+            "ExportName": "daws25-org-ConfigurationSetName"
+        },
+        {
+            "OutputKey": "InboundSMTPEndpoint",
+            "OutputValue": "inbound-smtp.us-east-1.amazonaws.com",
+            "Description": "SES SMTP endpoint for receiving emails",
+            "ExportName": "daws25-org-InboundSMTPEndpoint"
+        },
+        {
+            "OutputKey": "MailerFunctionName",
+            "OutputValue": "daws25-org-fn-mailer",
+            "Description": "Name of the mailer Lambda function",
+            "ExportName": "daws25-org-MailerFunctionName"
+        },
+        {
+            "OutputKey": "EmailStorageBucketArn",
+            "OutputValue": "arn:aws:s3:::daws25-org-ses-s3storagestack-2-emailstoragebucket-tytknagjcb2a",
+            "Description": "ARN of the S3 bucket for email storage",
+            "ExportName": "daws25-org-EmailStorageBucketArn"
+        },
+        {
+            "OutputKey": "MailerFunctionArn",
+            "OutputValue": "arn:aws:lambda:us-east-1:081276392869:function:daws25-org-fn-mailer",
+            "Description": "ARN of the mailer Lambda function",
+            "ExportName": "daws25-org-MailerFunctionArn"
+        }
+    ],
+    "Tags": [],
+    "EnableTerminationProtection": false,
+    "DriftInformation": {
+        "StackDriftStatus": "NOT_CHECKED"
+    },
+    "LastOperations": [
+        {
+            "OperationType": "UPDATE_STACK",
+            "OperationId": "010fb6ea-6382-4771-9f7d-f5afdd1f0f9e"
+        }
+    ]
+}

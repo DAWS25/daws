@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CodeBuild project with GitHub webhook for GitOps automation
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository in format owner/repo
+    Default: daws25/GitOps
+
+  GitHubBranch:
+    Type: String
+    Description: Branch to trigger builds on
+    Default: main
+
+  ProjectName:
+    Type: String
+    Description: Name of the CodeBuild project
+    Default: gitops-webhook
+
+  BuildSpec:
+    Type: String
+    Description: Path to buildspec file in the repository
+    Default: gitops/buildspec.yaml
+
+  ConnectionArn:
+    Type: String
+    Description: ARN of existing CodeConnection for GitHub
+
+Resources:
+  # =============================================================================
+  # IAM Role for CodeBuild
+  # =============================================================================
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-codebuild-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildBasePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}:*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::codepipeline-${AWS::Region}-*'
+              - Effect: Allow
+                Action:
+                  - codeconnections:GetConnectionToken
+                  - codeconnections:GetConnection
+                  - codeconnections:UseConnection
+                  - codestar-connections:GetConnectionToken
+                  - codestar-connections:GetConnection
+                  - codestar-connections:UseConnection
+                Resource:
+                  - !Ref ConnectionArn
+
+  # =============================================================================
+  # CodeBuild Project with GitHub Webhook
+  # =============================================================================
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Ref ProjectName
+      Description: !Sub 'GitOps webhook build for ${GitHubRepo}'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        EnvironmentVariables:
+          - Name: GITHUB_REPO
+            Value: !Ref GitHubRepo
+          - Name: GITHUB_BRANCH
+            Value: !Ref GitHubBranch
+      Source:
+        Type: GITHUB
+        Location: !Sub 'https://github.com/${GitHubRepo}.git'
+        BuildSpec: !Ref BuildSpec
+        GitCloneDepth: 1
+        ReportBuildStatus: true
+      SourceVersion: !Sub 'refs/heads/${GitHubBranch}'
+      Triggers:
+        Webhook: true
+        FilterGroups:
+          # Trigger on push to specified branch
+          - - Type: EVENT
+              Pattern: PUSH
+            - Type: HEAD_REF
+              Pattern: !Sub '^refs/heads/${GitHubBranch}$'
+          # Trigger on pull requests to specified branch
+          - - Type: EVENT
+              Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED
+            - Type: BASE_REF
+              Pattern: !Sub '^refs/heads/${GitHubBranch}$'
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ProjectName}'
+      Tags:
+        - Key: Project
+          Value: GitOps
+
+Outputs:
+  ProjectName:
+    Description: CodeBuild project name
+    Value: !Ref CodeBuildProject
+
+  ProjectArn:
+    Description: CodeBuild project ARN
+    Value: !GetAtt CodeBuildProject.Arn
+
+  WebhookUrl:
+    Description: GitHub webhook URL (auto-configured by CodeBuild)
+    Value: !Sub 'https://codebuild.${AWS::Region}.amazonaws.com/webhooks'
+
+  LogGroup:
+    Description: CloudWatch Logs group for build logs
+    Value: !Sub '/aws/codebuild/${ProjectName}'

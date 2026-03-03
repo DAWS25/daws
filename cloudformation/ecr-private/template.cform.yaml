@@ -1,0 +1,27 @@
+# export REPOSITORY_NAME=project-app
+# aws cloudformation deploy --stack-name ecr-$REPOSITORY_NAME --template-file cloudformation/ecr-private/template.cform.yaml --parameter-overrides RepositoryName=$REPOSITORY_NAME
+# aws cloudformation delete-stack --stack-name ecr-$REPOSITORY_NAME
+Description: ECR Repository
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Description: Name of the ECR repository
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+
+Outputs:
+  RepositoryArn:
+    Description: ARN of the ECR repository
+    Value: !GetAtt Repository.Arn
+    Export:
+      Name: !Sub "${RepositoryName}-RepositoryArn"
+
+  LoginCommand:
+    Description: Command to login to the ECR repository
+    Value: !Sub "aws ecr get-login-password --region ${AWS::Region} | docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+    

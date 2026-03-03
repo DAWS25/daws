@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SES receiving resources - receipt rules and email acceptance
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for SES
+
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID
+
+  EmailStorageBucketName:
+    Type: String
+    Description: S3 bucket name for storing received emails
+
+Resources:
+  # =============================================================================
+  # Inbound MX Record
+  # Routes incoming emails to SES inbound SMTP servers.
+  # Required for receiving emails at *@yourdomain.com.
+  # =============================================================================
+  InboundMXRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub '${DomainName}.'
+      Type: MX
+      TTL: '300'
+      ResourceRecords:
+        - !Sub '10 inbound-smtp.${AWS::Region}.amazonaws.com'
+
+  # =============================================================================
+  # DMARC Record (Domain-based Message Authentication)
+  # Tells receiving servers what to do with emails that fail SPF/DKIM checks.
+  # p=quarantine means suspicious emails go to spam. Reports sent to dmarc-reports@.
+  # =============================================================================
+  DMARCRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub '_dmarc.${DomainName}.'
+      Type: TXT
+      TTL: '300'
+      ResourceRecords:
+        - !Sub '"v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@${DomainName}"'
+
+  # =============================================================================
+  # SES Receipt Rule Set
+  # Container for receipt rules that process incoming emails.
+  # =============================================================================
+  SESReceiptRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Properties:
+      RuleSetName: !Sub '${DomainName}-ruleset'
+
+  # =============================================================================
+  # SES Receipt Rule - Store Emails in S3
+  # Saves incoming emails to S3 bucket. Enables virus scanning.
+  # =============================================================================
+  SESReceiptRule:
+    Type: AWS::SES::ReceiptRule
+    DependsOn: SESReceiptRuleSet
+    Properties:
+      RuleSetName: !Sub '${DomainName}-ruleset'
+      Rule:
+        Name: !Sub '${DomainName}-store-emails'
+        Enabled: true
+        ScanEnabled: true
+        Recipients:
+          - !Ref DomainName
+        Actions:
+          - S3Action:
+              BucketName: !Ref EmailStorageBucketName
+              ObjectKeyPrefix: 'emails/'
+
+Outputs:
+  ReceiptRuleSetName:
+    Description: Name of the SES Receipt Rule Set
+    Value: !Sub '${DomainName}-ruleset'
+
+  InboundSMTPEndpoint:
+    Description: SES SMTP endpoint for receiving emails
+    Value: !Sub 'inbound-smtp.${AWS::Region}.amazonaws.com'

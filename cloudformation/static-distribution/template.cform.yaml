@@ -3,7 +3,7 @@
 # ZONE_ID="Z044981111XDI2RGQ2GM9"
 # CERTIFICATE_ARN="arn:aws:acm:us-east-1:730335617563:certificate/777043cb-290c-4e63-8a20-c970da31a8bf"
 
-# aws cloudformation deploy --template-file cloudformation/static-distribution/template.cform.yaml --stack-name "moontracer-stack" --parameter-overrides BucketName=$BUCKET_NAME DomainName=$DOMAIN_NAME HostedZoneId=$ZONE_ID CertificateArn=$CERTIFICATE_ARN --capabilities CAPABILITY_IAM
+# aws cloudformation deploy --template-file cloudformation/static-distribution/template.cform.yaml --stack-name "distribution-stack" --parameter-overrides BucketName=$BUCKET_NAME DomainName=$DOMAIN_NAME HostedZoneId=$ZONE_ID CertificateArn=$CERTIFICATE_ARN --capabilities CAPABILITY_IAM
 
 # aws s3 sync ./solutions/moontracer-workshop/distribution s3://$BUCKET_NAME --delete
 
@@ -126,40 +126,40 @@ Outputs:
     Description: Name of the S3 bucket
     Value: !Ref DistributionBucket
     Export:
-      Name: !Sub "${AWS::StackName}-BucketName"
+      Name: !Sub "${EnvId}-BucketName"
 
   BucketArn:
     Description: ARN of the S3 bucket
     Value: !GetAtt DistributionBucket.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-BucketArn"
+      Name: !Sub "${EnvId}-BucketArn"
 
   BucketDomainName:
     Description: Regional domain name of the S3 bucket
     Value: !GetAtt DistributionBucket.RegionalDomainName
     Export:
-      Name: !Sub "${AWS::StackName}-BucketDomainName"
+      Name: !Sub "${EnvId}-BucketDomainName"
 
   DistributionId:
     Description: CloudFront distribution ID
     Value: !Ref CloudFrontDistribution
     Export:
-      Name: !Sub "${AWS::StackName}-DistributionId"
+      Name: !Sub "${EnvId}-DistributionId"
 
   DistributionDomainName:
     Description: CloudFront distribution domain name
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
-      Name: !Sub "${AWS::StackName}-DistributionDomainName"
+      Name: !Sub "${EnvId}-DistributionDomainName"
 
   WebsiteURL:
     Description: Website URL with custom domain
     Value: !Sub "https://${DomainName}"
     Export:
-      Name: !Sub "${AWS::StackName}-WebsiteURL"
+      Name: !Sub "${EnvId}-WebsiteURL"
 
   OriginAccessControlId:
     Description: Origin Access Control ID
     Value: !Ref OriginAccessControl
     Export:
-      Name: !Sub "${AWS::StackName}-OACId"
+      Name: !Sub "${EnvId}-OACId"

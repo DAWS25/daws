@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Main template for SES setup using nested stacks for sending, receiving, and storage
+
+Parameters:
+  EnvId:
+    Type: String
+    Description: Environment identifier used for cross-stack exports
+    Default: daws25-org
+
+  DomainName:
+    Type: String
+    Description: The domain name for SES (e.g., example.com)
+    Default: daws25.org
+
+  HostedZoneId:
+    Type: String
+    Description: The Route 53 Hosted Zone ID for DNS records
+    Default: Z0921914152XH19OIIQKY
+
+Resources:
+  # =============================================================================
+  # S3 Storage Stack
+  # Creates S3 bucket for storing received emails
+  # =============================================================================
+  S3StorageStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: s3-storage.cform.yaml
+      TimeoutInMinutes: 10
+
+  # =============================================================================
+  # SES Send Stack
+  # Creates SES domain identity, SPF records, and configuration set
+  # =============================================================================
+  SESSendStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ses-send.cform.yaml
+      Parameters:
+        DomainName: !Ref DomainName
+        DomainNameSafe: !Join ['-', !Split ['.', !Ref DomainName]]
+        HostedZoneId: !Ref HostedZoneId
+      TimeoutInMinutes: 10
+
+  # =============================================================================
+  # SES Receive Stack
+  # Creates receipt rules and inbound DNS records
+  # =============================================================================
+  SESReceiveStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - S3StorageStack
+      - SESSendStack
+    Properties:
+      TemplateURL: ses-receive.cform.yaml
+      Parameters:
+        DomainName: !Ref DomainName
+        HostedZoneId: !Ref HostedZoneId
+        EmailStorageBucketName: !GetAtt S3StorageStack.Outputs.EmailStorageBucket
+      TimeoutInMinutes: 10
+
+  # =============================================================================
+  # Mailer Stack
+  # Creates Lambda function for testing email sending
+  # =============================================================================
+  MailerStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: SESSendStack
+    Properties:
+      TemplateURL: fn-mailer.cform.yaml
+      Parameters:
+        EnvId: !Ref EnvId
+        DomainName: !Ref DomainName
+        ConfigurationSetName: !GetAtt SESSendStack.Outputs.ConfigurationSetName
+      TimeoutInMinutes: 10
+
+Outputs:
+  DomainName:
+    Description: The domain configured for SES
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${EnvId}-DomainName'
+
+  DomainIdentityArn:
+    Description: ARN of the SES Domain Identity
+    Value: !GetAtt SESSendStack.Outputs.DomainIdentityArn
+    Export:
+      Name: !Sub '${EnvId}-DomainIdentityArn'
+
+  ConfigurationSetName:
+    Description: Name of the SES Configuration Set
+    Value: !GetAtt SESSendStack.Outputs.ConfigurationSetName
+    Export:
+      Name: !Sub '${EnvId}-ConfigurationSetName'
+
+  ReceiptRuleSetName:
+    Description: Name of the SES Receipt Rule Set
+    Value: !GetAtt SESReceiveStack.Outputs.ReceiptRuleSetName
+    Export:
+      Name: !Sub '${EnvId}-ReceiptRuleSetName'
+
+  SMTPEndpoint:
+    Description: SES SMTP endpoint for sending emails
+    Value: !GetAtt SESSendStack.Outputs.SMTPEndpoint
+    Export:
+      Name: !Sub '${EnvId}-SMTPEndpoint'
+
+  InboundSMTPEndpoint:
+    Description: SES SMTP endpoint for receiving emails
+    Value: !GetAtt SESReceiveStack.Outputs.InboundSMTPEndpoint
+    Export:
+      Name: !Sub '${EnvId}-InboundSMTPEndpoint'
+
+  EmailStorageBucket:
+    Description: S3 bucket for storing received emails
+    Value: !GetAtt S3StorageStack.Outputs.EmailStorageBucket
+    Export:
+      Name: !Sub '${EnvId}-EmailStorageBucket'
+
+  EmailStorageBucketArn:
+    Description: ARN of the S3 bucket for email storage
+    Value: !GetAtt S3StorageStack.Outputs.EmailStorageBucketArn
+    Export:
+      Name: !Sub '${EnvId}-EmailStorageBucketArn'
+
+  MailerFunctionName:
+    Description: Name of the mailer Lambda function
+    Value: !GetAtt MailerStack.Outputs.MailerFunctionName
+    Export:
+      Name: !Sub '${EnvId}-MailerFunctionName'
+
+  MailerFunctionArn:
+    Description: ARN of the mailer Lambda function
+    Value: !GetAtt MailerStack.Outputs.MailerFunctionArn
+    Export:
+      Name: !Sub '${EnvId}-MailerFunctionArn'
