@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -e
 
 # Log to both cloud-init output and a dedicated log file.
 exec > >(tee -a /var/log/user-data-argocd-k3s.log) 2>&1
