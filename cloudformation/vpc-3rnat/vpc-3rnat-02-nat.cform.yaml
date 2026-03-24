@@ -1,0 +1,87 @@
+# aws cloudformation deploy --stack-name vpc-3rnat-02-nat --template-file cloudformation/vpc-3rnat/vpc-3rnat-02-nat.cform.yaml
+# aws cloudformation delete-stack --stack-name vpc-3rnat-02-nat
+Description: Single regional NAT Gateway and private route table for the vpc-3rnat VPC.
+
+Parameters:
+  TenantId:
+    Type: String
+    Default: main
+
+  EnvId:
+    Type: String
+    Default: main
+  
+
+
+Resources:
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${TenantId}-${EnvId}-nat-eip
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-PublicSubnet1Id
+      Tags:
+        - Key: Name
+          Value: !Sub ${TenantId}-${EnvId}-nat
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${TenantId}-${EnvId}-private-rt
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  AssocPrivateSubnet1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-PrivateSubnet1Id
+      RouteTableId: !Ref PrivateRouteTable
+
+  AssocPrivateSubnet2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-PrivateSubnet2Id
+      RouteTableId: !Ref PrivateRouteTable
+
+  AssocPrivateSubnet3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-PrivateSubnet3Id
+      RouteTableId: !Ref PrivateRouteTable
+
+Outputs:
+  NatGatewayId:
+    Value: !Ref NatGateway
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-NatGatewayId
+
+  NatEipAllocationId:
+    Value: !GetAtt NatEip.AllocationId
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-NatEipAllocationId
+
+  PrivateRouteTableId:
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-PrivateRouteTableId
+

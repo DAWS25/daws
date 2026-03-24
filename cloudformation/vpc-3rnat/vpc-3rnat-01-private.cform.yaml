@@ -1,0 +1,90 @@
+# aws cloudformation deploy --stack-name vpc-3rnat-01-private --template-file cloudformation/vpc-3rnat/vpc-3rnat-01-private.cform.yaml
+# aws cloudformation delete-stack --stack-name vpc-3rnat-01-private
+Description: Private subnets (NAT-routable) for the vpc-3rnat VPC.
+
+Parameters:
+  TenantId:
+    Type: String
+    Default: main
+  
+  EnvId:
+    Type: String
+    Default: main
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+  
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.6.0/24
+  
+  PrivateSubnet3Cidr:
+    Type: String
+    Default: 10.0.9.0/24
+
+Resources:
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-VpcId
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${TenantId}-${EnvId}-private-a
+        - Key: Tier
+          Value: private
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-VpcId
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${TenantId}-${EnvId}-private-b
+        - Key: Tier
+          Value: private
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !ImportValue
+        Fn::Sub: ${TenantId}-${EnvId}-VpcId
+      CidrBlock: !Ref PrivateSubnet3Cidr
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${TenantId}-${EnvId}-private-c
+        - Key: Tier
+          Value: private
+
+Outputs:
+  PrivateSubnetIds:
+    Value:
+      !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3]]
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-PrivateSubnetIds
+
+  PrivateSubnet1Id:
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-PrivateSubnet1Id
+
+  PrivateSubnet2Id:
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-PrivateSubnet2Id
+
+  PrivateSubnet3Id:
+    Value: !Ref PrivateSubnet3
+    Export:
+      Name: !Sub ${TenantId}-${EnvId}-PrivateSubnet3Id
+
