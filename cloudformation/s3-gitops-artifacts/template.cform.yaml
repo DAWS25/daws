@@ -1,0 +1,32 @@
+# aws cloudformation deploy --stack-name s3-gitops-artifacts --template-file cloudformation/s3-gitops-artifacts/template.cform.yaml
+# aws cloudformation delete-stack --stack-name s3-gitops-artifacts
+Description: S3 bucket for GitOps artifacts (k3s logs, kubeconfigs, etc.)
+
+Resources:
+  GitopsArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub gitops-artifacts-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Purpose
+          Value: gitops-artifacts
+
+Outputs:
+  BucketName:
+    Value: !Ref GitopsArtifactsBucket
+    Export:
+      Name: GitopsArtifactsBucketName
+
+  BucketArn:
+    Value: !GetAtt GitopsArtifactsBucket.Arn
+    Export:
+      Name: GitopsArtifactsBucketArn
