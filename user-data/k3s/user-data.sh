@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
 # Retry helper: retry <max_attempts> <sleep_seconds> <command...>
 retry() {
@@ -16,17 +16,17 @@ retry() {
   done
 }
 
-echo "[$(date -Iseconds)] Starting k3s on Amazon Linux 2023"
+echo "[$(date -Iseconds)] Setting up k3s on Amazon Linux 2023 [1357]"
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ARTIFACTS_BUCKET="gitops-artifacts-${ACCOUNT_ID}"
+ARTIFACTS_BUCKET=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(ec2-metadata --instance-id | cut -d ' ' -f 2)" "Name=key,Values=artifacts-bucket" --query 'Tags[0].Value' --output text)
 LOG_FILE="/var/log/cloud-init-output.log"
 
-echo "Installing base dependencies"
-retry 5 10 dnf install -y curl tar gzip jq ca-certificates
-update-ca-trust
+# echo "Installing base dependencies"
+# retry 5 10 dnf install -y curl tar gzip jq ca-certificates
+#update-ca-trust
 
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+export KUBECONFIG="/etc/rancher/k3s/k3s.yaml"
 export PATH="$PATH:/usr/local/bin"
 
 echo "Installing k3s"
@@ -40,7 +40,7 @@ kubectl wait --for=condition=Ready node --all --timeout=300s
 
 echo "[$(date -Iseconds)] k3s setup complete"
 
-echo "Uploading artifacts to S3"
+echo "Uploading artifacts to S3 [$ARTIFACTS_BUCKET]"
 if aws s3api head-bucket --bucket "${ARTIFACTS_BUCKET}" 2>/dev/null; then
   aws s3 cp "${LOG_FILE}" "s3://${ARTIFACTS_BUCKET}/k3s/cloud-init-output.log"
   aws s3 cp "${KUBECONFIG}"  "s3://${ARTIFACTS_BUCKET}/k3s/kubeconfig.yaml"
