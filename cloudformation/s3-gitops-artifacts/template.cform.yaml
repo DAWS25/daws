@@ -24,7 +24,7 @@ Outputs:
   BucketName:
     Value: !Ref GitopsArtifactsBucket
     Export:
-      Name: GitopsArtifactsBucketName
+      Name: ArtifactsBucketName
 
   BucketArn:
     Value: !GetAtt GitopsArtifactsBucket.Arn
