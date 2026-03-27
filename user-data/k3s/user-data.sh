@@ -19,7 +19,35 @@ retry() {
 echo "[$(date -Iseconds)] Setting up k3s on Amazon Linux 2023 [1357]"
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+<<<<<<< HEAD
 ARTIFACTS_BUCKET=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(ec2-metadata --instance-id | cut -d ' ' -f 2)" "Name=key,Values=artifacts-bucket" --query 'Tags[0].Value' --output text)
+=======
+DEFAULT_ARTIFACTS_BUCKET="gitops-artifacts-${ACCOUNT_ID}"
+
+IMDS_TOKEN=$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
+INSTANCE_ID=$(curl -sS -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
+  "http://169.254.169.254/latest/meta-data/instance-id" || true)
+REGION=$(curl -sS -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
+  "http://169.254.169.254/latest/meta-data/placement/region" || true)
+
+if [[ -n "${INSTANCE_ID}" && -n "${REGION}" ]]; then
+  TAGGED_BUCKET=$(aws ec2 describe-tags \
+    --region "${REGION}" \
+    --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=ARTIFACTS_BUCKET" \
+    --query "Tags[0].Value" --output text 2>/dev/null || true)
+else
+  TAGGED_BUCKET=""
+fi
+
+if [[ -n "${TAGGED_BUCKET}" && "${TAGGED_BUCKET}" != "None" ]]; then
+  ARTIFACTS_BUCKET="${TAGGED_BUCKET}"
+  echo "Using ARTIFACTS_BUCKET from instance tag: ${ARTIFACTS_BUCKET}"
+else
+  ARTIFACTS_BUCKET="${DEFAULT_ARTIFACTS_BUCKET}"
+  echo "Using default ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET}"
+fi
+>>>>>>> 752c53a (chore: workspace sync 2026-03-27)
 LOG_FILE="/var/log/cloud-init-output.log"
 
 # echo "Installing base dependencies"
