@@ -27,6 +27,8 @@ INSTANCE_ID=$(curl -sS -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
   "http://169.254.169.254/latest/meta-data/instance-id" || true)
 REGION=$(curl -sS -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
   "http://169.254.169.254/latest/meta-data/placement/region" || true)
+PUBLIC_IP=$(curl -sS -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
+  "http://169.254.169.254/latest/meta-data/public-ipv4" || true)
 
 if [[ -n "${INSTANCE_ID}" && -n "${REGION}" ]]; then
   TAGGED_BUCKET=$(aws ec2 describe-tags \
@@ -62,6 +64,14 @@ retry 30 5 kubectl get nodes
 
 echo "Waiting for node to be Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
+
+# Patch kubeconfig server endpoint to use public IP instead of 127.0.0.1
+if [[ -n "${PUBLIC_IP}" && "${PUBLIC_IP}" != "None" ]]; then
+  echo "[$(date -Iseconds)] Patching kubeconfig server URL from 127.0.0.1 to ${PUBLIC_IP}"
+  sed -i "s|https://127.0.0.1:6443|https://${PUBLIC_IP}:6443|g" "${KUBECONFIG}"
+else
+  echo "[$(date -Iseconds)] WARNING: Could not determine public IP; kubeconfig will use 127.0.0.1"
+fi
 
 echo "[$(date -Iseconds)] k3s setup complete"
 
