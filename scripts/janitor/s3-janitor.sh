@@ -1,58 +1,117 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 echo -n ""
 
-# Delete all object versions and delete markers before bucket deletion
-empty_bucket_versions() {
-  local bucket="$1"
-  # Remove current versions fast
-  aws s3 rm "s3://${bucket}" --recursive 2>/dev/null || true
-  # Loop through pages of versions and delete-markers (up to 1000 per pass)
-  while true; do
-    # Count versions and delete markers on the first page
-    local vcount mcount
-    vcount=$(aws s3api list-object-versions --bucket "${bucket}" --query 'length(Versions)' --output text 2>/dev/null || echo 0)
-    mcount=$(aws s3api list-object-versions --bucket "${bucket}" --query 'length(DeleteMarkers)' --output text 2>/dev/null || echo 0)
-    [[ "${vcount}" == "None" || -z "${vcount}" ]] && vcount=0
-    [[ "${mcount}" == "None" || -z "${mcount}" ]] && mcount=0
+MAX_BUCKET_PASSES=50
+MAX_BUCKET_RETRIES=8
 
-    # Nothing left to delete
-    if (( vcount == 0 && mcount == 0 )); then
-      break
-    fi
-
-    # Batch delete up to 1000 object versions
-    if (( vcount > 0 )); then
-      payload=$(aws s3api list-object-versions \
-        --bucket "${bucket}" \
-        --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
-        --output json)
-      # delete-objects requires at least one object; guarded by vcount
-      aws s3api delete-objects --bucket "${bucket}" --delete "${payload}" >/dev/null
-    fi
-
-    # Batch delete up to 1000 delete markers
-    if (( mcount > 0 )); then
-      payload=$(aws s3api list-object-versions \
-        --bucket "${bucket}" \
-        --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
-        --output json)
-      aws s3api delete-objects --bucket "${bucket}" --delete "${payload}" >/dev/null
-    fi
-  done
+current_region() {
+  local region
+  region="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
+  if [[ -z "${region}" ]]; then
+    region="$(aws configure get region 2>/dev/null || true)"
+  fi
+  if [[ -z "${region}" ]]; then
+    echo "ERROR: AWS region is not configured. Set AWS_REGION, AWS_DEFAULT_REGION, or aws configure region." >&2
+    exit 1
+  fi
+  echo "${region}"
 }
 
-# For S3 buckets: list and delete until none remain.
-  while true; do
-    buckets=$(aws s3api list-buckets --query 'Buckets[].Name' --output text 2>/dev/null)
-    if [[ -z "${buckets}" ]]; then
-      break
+bucket_region() {
+  local bucket="$1"
+  local loc
+  loc=$(aws s3api get-bucket-location --bucket "${bucket}" --query 'LocationConstraint' --output text 2>/dev/null || echo "unknown")
+  case "${loc}" in
+    None|null|"") echo "us-east-1" ;;
+    EU) echo "eu-west-1" ;;
+    *) echo "${loc}" ;;
+  esac
+}
+
+delete_bucket_configs() {
+  local bucket="$1"
+  aws s3api delete-bucket-policy --bucket "${bucket}" 2>/dev/null || true
+  aws s3api delete-public-access-block --bucket "${bucket}" 2>/dev/null || true
+  aws s3api delete-bucket-ownership-controls --bucket "${bucket}" 2>/dev/null || true
+  aws s3api delete-bucket-website --bucket "${bucket}" 2>/dev/null || true
+  aws s3api delete-bucket-tagging --bucket "${bucket}" 2>/dev/null || true
+  aws s3api delete-bucket-lifecycle --bucket "${bucket}" 2>/dev/null || true
+  aws s3api delete-bucket-encryption --bucket "${bucket}" 2>/dev/null || true
+}
+
+delete_version_batch() {
+  local bucket="$1"
+  local kind="$2"
+  local query="$3"
+
+  local count payload
+  count=$(aws s3api list-object-versions --bucket "${bucket}" --query "length(${kind})" --output text 2>/dev/null || echo 0)
+  [[ "${count}" == "None" || -z "${count}" ]] && count=0
+  if (( count == 0 )); then
+    echo 0
+    return 0
+  fi
+
+  payload=$(aws s3api list-object-versions \
+    --bucket "${bucket}" \
+    --query "{Objects: ${query}, Quiet: true}" \
+    --output json)
+
+  aws s3api delete-objects --bucket "${bucket}" --delete "${payload}" >/dev/null
+  echo "${count}"
+}
+
+# Delete all object versions and delete markers before bucket deletion.
+empty_bucket_versions() {
+  local bucket="$1"
+  local attempts=0
+
+  aws s3 rm "s3://${bucket}" --recursive 2>/dev/null || true
+
+  while (( attempts < MAX_BUCKET_RETRIES )); do
+    local deleted_versions deleted_markers
+    deleted_versions=$(delete_version_batch "${bucket}" "Versions" 'Versions[].{Key:Key,VersionId:VersionId}')
+    deleted_markers=$(delete_version_batch "${bucket}" "DeleteMarkers" 'DeleteMarkers[].{Key:Key,VersionId:VersionId}')
+
+    if (( deleted_versions == 0 && deleted_markers == 0 )); then
+      return 0
     fi
-    for bucket in ${buckets}; do
-      empty_bucket_versions "${bucket}"
-      aws s3api delete-bucket --bucket "${bucket}" 2>/dev/null || true
-      echo -e "s3	bucket	${bucket}"
-    done
+
+    attempts=$((attempts + 1))
   done
+
+  echo "WARN: Could not fully empty bucket versions after ${MAX_BUCKET_RETRIES} passes: ${bucket}" >&2
+  return 1
+}
+
+TARGET_REGION="$(current_region)"
+
+# For S3 buckets in the current region: empty and delete until none remain.
+for ((pass = 1; pass <= MAX_BUCKET_PASSES; pass++)); do
+  progress=0
+  buckets=$(aws s3api list-buckets --query 'Buckets[].Name' --output text 2>/dev/null || true)
+  [[ -z "${buckets}" ]] && break
+
+  for bucket in ${buckets}; do
+    bregion="$(bucket_region "${bucket}")"
+    [[ "${bregion}" != "${TARGET_REGION}" ]] && continue
+
+    progress=1
+    delete_bucket_configs "${bucket}"
+    empty_bucket_versions "${bucket}" || true
+
+    if aws s3api delete-bucket --bucket "${bucket}" >/dev/null 2>&1; then
+      echo -e "s3\tbucket\t${bucket}"
+    else
+      echo "WARN: Bucket still exists (possibly locked or in use): ${bucket}" >&2
+    fi
+  done
+
+  if (( progress == 0 )); then
+    break
+  fi
+done
+
 echo -n ""
